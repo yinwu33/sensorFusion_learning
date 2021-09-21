@@ -362,12 +362,12 @@ bool MultiPosCalibration_<_T>::calibrateAcc(
     ceres::Problem problem;
     for( int i = 0; i < static_samples.size(); i++)
     {
-      ceres::CostFunction* cost_function = MultiPosAccResidual<_T>::Create ( 
-        g_mag_, static_samples[i].data() 
-      );
-      // ceres::CostFunction* cost_function = MultiPosAccResidualAnalytic<_T>::Create ( 
+      // ceres::CostFunction* cost_function = MultiPosAccResidual<_T>::Create ( 
       //   g_mag_, static_samples[i].data() 
       // );
+      ceres::CostFunction* cost_function = MultiPosAccResidualAnalytic<_T>::Create ( 
+        g_mag_, static_samples[i].data() 
+      );
 
       problem.AddResidualBlock ( 
         cost_function,           /* error fuction */
