@@ -1,9 +1,9 @@
 <launch>
     <node pkg="tf" type="static_transform_publisher" name="ENU_broadcaster" args="0 0 0 0 0 0 inertial ENU 200" />
     
-    <node pkg="imu_integration" type="generator_node" name="imu_integration_generator_node" clear_params="true">
+    <node pkg="rosbag" type="play" name="rosbag_play_sim" args="--clock /workspace/data/gnss_ins_sim/my_sim/constant_velocity.bag">
         <!-- load default params -->
-        <rosparam command="load" file="$(find imu_integration)/config/generator.yaml" />
+        <!-- <rosparam command="load" file="$(find imu_integration)/config/generator.yaml" /> -->
 
         <!-- custom configuration -->
     </node>
@@ -15,7 +15,7 @@
         <!-- custom configuration -->
     </node>
 
-    <node pkg="rosbag" type="record" name="estimate_gt" args="record -o /workspace/data/ /pose/estimation /pose/ground_truth --duration=5s"/>
+    <node pkg="rosbag" type="record" name="estimate_gt" args="record -o /workspace/data/sim/ /pose/estimation /pose/ground_truth --duration=30s"/>
 
      <node name="rviz" pkg="rviz" type="rviz" args="-d $(find imu_integration)/rviz/imu_integration.rviz" required="true" /> 
 </launch>

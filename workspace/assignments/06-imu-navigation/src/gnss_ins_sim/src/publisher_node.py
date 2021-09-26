@@ -71,12 +71,13 @@ def gnss_ins_sim_publisher():
     """
     Publish simulated GNSS/IMU data
     """
-    
+
     # ensure gnss_ins_sim_node is unique:
     rospy.init_node('gnss_ins_sim_node')
     
     # parse params:
-    motion_def_name = 'motion_def-3d.csv' #rospy.get_param('motion_file')
+    # motion_def_name = 'motion_def-3d.csv' #rospy.get_param('motion_file')
+    motion_def_name = 'allan_variance_analysis.csv'
     sample_freq_imu = 100.0               #rospy.get_param('sample_frequency/imu')
     sample_freq_gps = 10.0                #rospy.get_param('sample_frequency/gps')
     topic_name_imu = '~sim/sensor/imu'    #rospy.get_param('topic_name')
@@ -87,6 +88,7 @@ def gnss_ins_sim_publisher():
     motion_def_path = os.path.join(
         rospkg.RosPack().get_path('gnss_ins_sim'), 'config', 'motion_def', motion_def_name
     )
+    print(motion_def_path)
     imu_simulator = get_gnss_ins_sim(
         # motion def file:
         motion_def_path,

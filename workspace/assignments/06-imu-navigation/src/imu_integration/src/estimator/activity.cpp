@@ -12,6 +12,7 @@ namespace imu_integration {
 
 namespace estimator {
 
+static Eigen::Matrix3d getSkew(Eigen::Vector3d v);
 Activity::Activity(void) 
     : private_nh_("~"), 
     initialized_(false),
@@ -124,18 +125,51 @@ bool Activity::UpdatePose(void) {
     } else {
         //
         // TODO: implement your estimation here
-        //
+        // init parameters at time k-1 -> last
+
+
+        Eigen::Matrix3d R_last = pose_.block<3, 3>(0, 0);
+        Eigen::Vector3d t_last = pose_.block<3, 1>(0, 3);
+        Eigen::Vector3d v_last = vel_;
+
+        Eigen::Vector3d w_curr = imu_data_buff_.back().angular_velocity;
+        Eigen::Vector3d a_curr = imu_data_buff_.back().linear_acceleration;
+        double time_curr = imu_data_buff_.back().time;
+
+        // IMUData imu_curr = imu_data_buff_.back();
+        // imu_data_buff_.pop_back();
+
+        Eigen::Vector3d w_last = imu_data_buff_.front().angular_velocity;
+        Eigen::Vector3d a_last = imu_data_buff_.front().linear_acceleration;
+        double time_last = imu_data_buff_.front().time;
+
+
+
+
         // get deltas:
-
+        double deltas = time_curr - time_last;
         // update orientation:
-
+        Eigen::Vector3d phi = (w_last + w_curr) / 2 * deltas;  // Median Method
+        // Eigen::Vector3d phi = w_last * deltas;  // Euler Method
+        double phi_norm = phi.norm();
+        Eigen::Matrix3d phi_skew = getSkew(phi);
+        Eigen::Matrix3d R_last_curr = Eigen::Matrix3d::Identity() 
+                                      + sin(phi_norm) / phi_norm * phi_skew
+                                      + (1 - cos(phi_norm)) / phi_norm / phi_norm * phi_skew * phi_skew;
+        Eigen::Matrix3d R_curr = R_last * R_last_curr;
         // get velocity delta:
-
+        Eigen::Vector3d v_curr = v_last + ((R_curr * a_curr + R_last * a_last) / 2 - G_) * deltas;
         // update position:
-
+        Eigen::Vector3d t_curr = t_last + v_last * deltas + 1/2 * ((R_curr * a_curr + R_last * a_last) / 2 - G_) * deltas * deltas;
         // move forward -- 
+        pose_.block<3, 3>(0, 0) = R_curr;
+        pose_.block<3, 1>(0, 3) = t_curr;
+        vel_ = v_curr;
         // NOTE: this is NOT fixed. you should update your buffer according to the method of your choice:
-        imu_data_buff_.pop_front();
+        // imu_data_buff_.pop_front();
+        IMUData imu_curr = imu_data_buff_.back();
+        imu_data_buff_.clear();
+        imu_data_buff_.push_back(imu_curr);
     }
     
     return true;
@@ -143,7 +177,9 @@ bool Activity::UpdatePose(void) {
 
 bool Activity::PublishPose() {
     // a. set header:
-    message_odom_.header.stamp = ros::Time::now();
+    // message_odom_.header.stamp = ros::Time::now();
+    auto time = ros::Time(imu_data_buff_.front().time);
+    message_odom_.header.stamp = time;
     message_odom_.header.frame_id = odom_config_.frame_id;
     
     // b. set child frame id:
@@ -316,6 +352,19 @@ void Activity::UpdatePosition(const double &delta_t, const Eigen::Vector3d &velo
     //
     pose_.block<3, 1>(0, 3) += delta_t*vel_ + 0.5*delta_t*velocity_delta;
     vel_ += velocity_delta;
+}
+
+
+static Eigen::Matrix3d getSkew(Eigen::Vector3d v) {
+    double a1 = v[0];
+    double a2 = v[1];
+    double a3 = v[2];
+
+    Eigen::Matrix3d m;
+    m << 0, -a3, a2, 
+         a3, 0, -a1, 
+         -a2, a1, 0;
+    return m;
 }
 
 

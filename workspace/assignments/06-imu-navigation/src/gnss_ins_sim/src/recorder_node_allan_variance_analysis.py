@@ -79,12 +79,19 @@ def get_gnss_ins_sim(motion_def_file, fs_imu, fs_gps):
 
     # imu measurements:
     step_size = 1.0 / fs_imu
-    for i, (gyro, accel) in enumerate(
+    for i, (gyro, accel, position_gt, orientation_gt, velocity_gt) in enumerate(
         zip(
             # a. gyro
             sim.dmgr.get_data_all('gyro').data[0], 
             # b. accel
-            sim.dmgr.get_data_all('accel').data[0]
+            sim.dmgr.get_data_all('accel').data[0],
+            
+            # c. position GT
+            sim.dmgr.get_data_all('ref_pos').data,
+            # d. orientation GT
+            sim.dmgr.get_data_all('ref_att_quat').data,
+            # e. velocity GT
+            sim.dmgr.get_data_all('ref_vel').data
         )
     ):
         yield {
@@ -98,7 +105,20 @@ def get_gnss_ins_sim(motion_def_file, fs_imu, fs_gps):
                 'accel_x': accel[0],
                 'accel_y': accel[1],
                 'accel_z': accel[2]
+            },
+            'ground_truth': {
+                'x': position_gt[0],
+                'y': position_gt[1],
+                'z': position_gt[2],
+                'q0': orientation_gt[0],
+                'q1': orientation_gt[1],
+                'q2': orientation_gt[2],
+                'q3': orientation_gt[3],
+                'vx': velocity_gt[0],
+                'vy': velocity_gt[1],
+                'vz': velocity_gt[2]
             }
+            
         }
 
 
@@ -114,6 +134,7 @@ def gnss_ins_sim_recorder():
     sample_freq_imu = rospy.get_param('/gnss_ins_sim_recorder_node/sample_frequency/imu')
     sample_freq_gps = rospy.get_param('/gnss_ins_sim_recorder_node/sample_frequency/gps')
     topic_name_imu = rospy.get_param('/gnss_ins_sim_recorder_node/topic_name')
+    topic_name_odom = rospy.get_param('/gnss_ins_sim_recorder_node/gt_topic_name')
     rosbag_output_path = rospy.get_param('/gnss_ins_sim_recorder_node/output_path')
     rosbag_output_name = rospy.get_param('/gnss_ins_sim_recorder_node/output_name')
 
@@ -135,12 +156,18 @@ def gnss_ins_sim_recorder():
     ) as bag:
         # get timestamp base:
         timestamp_start = rospy.Time.now()
+        
+        origin_x = 0.0
+        origin_y = 0.0
+        origin_z = 0.0
+        
+        init = False
 
         for measurement in imu_simulator:
             # init:
             msg = Imu()
             # a. set header:
-            msg.header.frame_id = 'NED'
+            msg.header.frame_id = 'ENU'
             msg.header.stamp = timestamp_start + rospy.Duration.from_sec(measurement['stamp'])
             # b. set orientation estimation:
             msg.orientation.x = 0.0
@@ -154,9 +181,34 @@ def gnss_ins_sim_recorder():
             msg.linear_acceleration.x = measurement['data']['accel_x']
             msg.linear_acceleration.y = measurement['data']['accel_y']
             msg.linear_acceleration.z = measurement['data']['accel_z']
+            
+            if not init:
+                origin_x = measurement['ground_truth']['x']
+                origin_y = measurement['ground_truth']['y']
+                origin_z = measurement['ground_truth']['z']
+                init = True
+            
+            # init for groundtruth
+            gt_msg = Odometry()
+            gt_msg.header.frame_id = 'inertial'
+            gt_msg.child_frame_id = 'inertial'
+            gt_msg.header.stamp = timestamp_start + rospy.Duration.from_sec(measurement['stamp'])
+            gt_msg.pose.pose.position.x = measurement['ground_truth']['x'] - origin_x
+            gt_msg.pose.pose.position.y = measurement['ground_truth']['y'] - origin_y
+            gt_msg.pose.pose.position.z = measurement['ground_truth']['z'] - origin_z
+            
+            gt_msg.pose.pose.orientation.w = measurement['ground_truth']['q0']
+            gt_msg.pose.pose.orientation.x = measurement['ground_truth']['q1']
+            gt_msg.pose.pose.orientation.y = measurement['ground_truth']['q2']
+            gt_msg.pose.pose.orientation.z = measurement['ground_truth']['q3']
+            
+            gt_msg.twist.twist.linear.x = measurement['ground_truth']['vx']
+            gt_msg.twist.twist.linear.y = measurement['ground_truth']['vy']
+            gt_msg.twist.twist.linear.z = measurement['ground_truth']['vz']
 
             # write:
             bag.write(topic_name_imu, msg, msg.header.stamp)
+            bag.write(topic_name_odom, gt_msg, msg.header.stamp)
 
 if __name__ == '__main__':
     try:
