@@ -2,3 +2,5 @@ build/
 devel/
 *.calib
 settings.json
+*.bag
+data/
